@@ -6,6 +6,8 @@ from dataclasses import asdict, is_dataclass
 import pandas as pd
 import streamlit as st
 
+import re
+import race_parser as race_parser_module
 from race_parser import parse_race
 from class_model import (
     analyse_race,
@@ -13,6 +15,93 @@ from class_model import (
     _effective_level,
     _reference_label,
 )
+
+
+def parse_race_robust(text: str):
+    """Parse an R&S race without confusing BP/barrier numbers with runners.
+
+    Some R&S markdown exports contain many standalone integers for weight/BP.
+    Older parser versions could treat a barrier position as a new runner and then
+    pick the following jockey name as the horse.  For markdown input we anchor on
+    the actual **runner number** rows and require a horse hyperlink in that block.
+    """
+    rp = race_parser_module
+
+    # Use the normal parser for non-markdown/plain-text inputs or when the parser
+    # internals are unavailable (keeps backwards compatibility).
+    if not hasattr(rp, '_parse_race_header') or not hasattr(rp, '_parse_runner_section'):
+        return parse_race(text)
+
+    raw_lines = text.replace('\u00a0', ' ').replace('\u202f', ' ').splitlines()
+    if not raw_lines:
+        return parse_race(text)
+
+    # Locate the actual field header. This deliberately ignores the race number at
+    # the very top of the page and all numeric weight/barrier cells inside runners.
+    anchor = 0
+    for i, line in enumerate(raw_lines):
+        u = line.upper()
+        if ('FORM' in u and 'HORSE' in u) or u.strip() == 'JOCKEY':
+            anchor = i
+            break
+
+    previous_winners = len(raw_lines)
+    for i in range(anchor, len(raw_lines)):
+        if re.search(r'\bPREVIOUS\s+WINNERS\b', raw_lines[i], re.I):
+            previous_winners = i
+            break
+
+    bold_num = re.compile(r'^\s*\*\*(\d{1,2})\*\*\s*$')
+    horse_link = re.compile(
+        r'https?://www\.racingandsports\.com\.au/thoroughbred/horse/', re.I
+    )
+
+    candidates = []
+    for i in range(anchor + 1, previous_winners):
+        m = bold_num.fullmatch(raw_lines[i])
+        if not m:
+            continue
+        num = int(m.group(1))
+        if not 1 <= num <= 30:
+            continue
+
+        # A true runner header must be followed by the CURRENT horse hyperlink
+        # before the next standalone bold runner number.
+        next_header = previous_winners
+        for j in range(i + 1, previous_winners):
+            if bold_num.fullmatch(raw_lines[j]):
+                next_header = j
+                break
+        block_preview = '\n'.join(raw_lines[i:next_header])
+        if horse_link.search(block_preview):
+            candidates.append((i, num))
+
+    # Keep one current-field block per runner number, in page order.
+    starts = []
+    seen = set()
+    for i, num in candidates:
+        if num in seen:
+            continue
+        starts.append((i, num))
+        seen.add(num)
+
+    if not starts:
+        return parse_race(text)
+
+    race = rp._parse_race_header(text)
+    race.runners = []
+    for idx, (line_i, num) in enumerate(starts):
+        end = starts[idx + 1][0] if idx + 1 < len(starts) else previous_winners
+        # IMPORTANT: pass RAW markdown, not pre-cleaned text. This lets the runner
+        # parser identify /thoroughbred/horse/ links and distinguish them from
+        # /jockey/ and /trainer/ links.
+        section = '\n'.join(raw_lines[line_i:end])
+        runner = rp._parse_runner_section(num, section)
+        if not getattr(runner, 'scratched', False):
+            race.runners.append(runner)
+
+    return race
+
 
 # -----------------------------------------------------------------------------
 # App shell
@@ -345,7 +434,7 @@ def render_input_card() -> None:
                 st.error("Paste or upload a race first.")
             else:
                 try:
-                    race = parse_race(raw)
+                    race = parse_race_robust(raw)
                     analyses = analyse_race(race)
                 except Exception as exc:
                     st.error(f"Could not analyse this race: {exc}")
