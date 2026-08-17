@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """Compatibility wrapper for Harnessform's parser.
 
-The original parser remains in ../harness_parser.py.  This package shadows that
+The original parser remains in ../harness_parser.py. This package shadows that
 module and loads it under a private name, then adds two safeguards needed for
 normal browser copy/paste from Racing & Sports:
 
@@ -15,6 +15,7 @@ This deliberately avoids using historical SP prices as today's market price.
 
 import importlib.util
 import re
+import sys
 from pathlib import Path
 
 _LEGACY_PATH = Path(__file__).resolve().parent.parent / "harness_parser.py"
@@ -22,6 +23,9 @@ _spec = importlib.util.spec_from_file_location("_harness_parser_legacy", _LEGACY
 if _spec is None or _spec.loader is None:
     raise ImportError(f"Could not load Harnessform parser from {_LEGACY_PATH}")
 _legacy = importlib.util.module_from_spec(_spec)
+# dataclasses resolves annotations through sys.modules while the legacy module is
+# executing, so register the private module before exec_module().
+sys.modules[_spec.name] = _legacy
 _spec.loader.exec_module(_legacy)
 
 # Re-export the original public API so harness_model.py continues to work.
