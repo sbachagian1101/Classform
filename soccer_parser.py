@@ -7,13 +7,16 @@ from typing import Optional
 
 def _clean(value: str) -> str:
     s = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", value or "")
-    s = s.replace("**", "").replace("*", "").replace("\xa0", " ").replace("\u202f", " ")
+    s = s.replace("**", "").replace("__", "").replace("`", "")
+    s = s.replace("\xa0", " ").replace("\u202f", " ").replace("\\~", "~")
+    s = re.sub(r"^\s*[#>*+-]+\s*", "", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
 def canonical_team(value: str) -> str:
     s = _clean(value).upper()
     s = re.sub(r"\b(FK|BK|FC)\b", "", s)
+    s = re.sub(r"[^A-ZÀ-ÖØ-Þ0-9 ]+", "", s)
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -52,130 +55,227 @@ class TeamProfile:
     source_text: str = ""
 
 
-def _row_values(text: str, label: str, start_marker: str = "") -> list[Optional[float]]:
-    section = text
-    if start_marker:
-        pos = section.lower().find(start_marker.lower())
-        if pos >= 0:
-            section = section[pos:]
-    for line in section.splitlines():
-        if not line.strip().startswith("|"):
+def _visible_lines(text: str) -> list[str]:
+    out = []
+    for raw in (text or "").splitlines():
+        line = _clean(raw)
+        if not line:
             continue
-        cells = [_clean(c) for c in line.strip().strip("|").split("|")]
-        if not cells or cells[0].strip().lower() != label.lower():
+        if re.fullmatch(r"[:|\- ]+", line):
             continue
-        values: list[Optional[float]] = []
-        for cell in cells[1:4]:
-            raw = cell.replace("%", "").replace(",", "").strip()
-            try:
-                values.append(float(raw))
-            except Exception:
-                values.append(None)
-        while len(values) < 3:
-            values.append(None)
-        return values
+        out.append(line)
+    return out
+
+
+def _slice(text: str, start_pat: str | None = None, end_pats: tuple[str, ...] = ()) -> str:
+    lo = 0
+    if start_pat:
+        m = re.search(start_pat, text, re.I | re.S)
+        if m:
+            lo = m.start()
+    hi = len(text)
+    for pat in end_pats:
+        m = re.search(pat, text[lo + 1 :], re.I | re.S)
+        if m:
+            hi = min(hi, lo + 1 + m.start())
+    return text[lo:hi]
+
+
+def _num_token(s: str) -> Optional[float]:
+    t = _clean(s).replace(",", "").strip()
+    m = re.fullmatch(r"([+-]?\d+(?:\.\d+)?)\s*%?", t)
+    return float(m.group(1)) if m else None
+
+
+def _numbers_in_line_after_label(line: str, label: str) -> list[float]:
+    c = _clean(line)
+    idx = c.lower().find(label.lower())
+    if idx < 0:
+        return []
+    tail = c[idx + len(label) :]
+    return [float(x) for x in re.findall(r"([+-]?\d+(?:\.\d+)?)\s*%?", tail)]
+
+
+def _metric_triplet(text: str, label: str, start_pat: str | None = None, end_pats: tuple[str, ...] = ()) -> list[Optional[float]]:
+    section = _slice(text, start_pat, end_pats)
+
+    # Markdown/table representation: label and three cells remain on one row.
+    for raw in section.splitlines():
+        if label.lower() not in _clean(raw).lower():
+            continue
+        c = _clean(raw.replace("|", " "))
+        if not c.lower().startswith(label.lower()):
+            continue
+        vals = _numbers_in_line_after_label(c, label)
+        if len(vals) >= 3:
+            return vals[:3]
+
+    # Browser-copy representation: table cells may be tabs or separate lines.
+    lines = _visible_lines(section)
+    for i, line in enumerate(lines):
+        if line.lower() != label.lower() and not line.lower().startswith(label.lower() + " "):
+            continue
+        vals = _numbers_in_line_after_label(line, label)
+        j = i + 1
+        while len(vals) < 3 and j < len(lines) and j <= i + 8:
+            n = _num_token(lines[j])
+            if n is not None:
+                vals.append(n)
+            elif vals and re.search(r"[A-Za-z]", lines[j]):
+                break
+            j += 1
+        if vals:
+            return (vals + [None, None, None])[:3]
     return [None, None, None]
 
 
-def _ppg_block(text: str, label: str, next_label: str) -> Optional[float]:
-    m = re.search(rf"\*\*{re.escape(label)}\*\*(.*?)(?=\*\*{re.escape(next_label)}\*\*)", text, flags=re.I | re.S)
-    if not m:
+def _form_ppg(text: str, label: str, next_label: str) -> Optional[float]:
+    lines = _visible_lines(text)
+    start = next((i for i, x in enumerate(lines) if x.lower() == label.lower()), None)
+    if start is None:
         return None
-    values = re.findall(r"\*\*([+-]?\d+(?:\.\d+)?)\*\*", m.group(1))
-    if len(values) >= 8:
-        try:
-            return float(values[7])
-        except ValueError:
-            return None
-    return None
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].lower() == next_label.lower()), len(lines))
+    nums = []
+    for x in lines[start + 1 : end]:
+        n = _num_token(x)
+        if n is not None:
+            nums.append(n)
+        if len(nums) >= 8:
+            break
+    return nums[7] if len(nums) >= 8 else None
 
 
 def _overall_ppg(text: str) -> Optional[float]:
-    m = re.search(r"\*\*Overall\*\*(.*?)(?=\*\*[\d.]+\*\*\s*\n\s*\*\*Points Per Game)", text, flags=re.I | re.S)
-    if not m:
+    lines = _visible_lines(text)
+    away_i = next((i for i, x in enumerate(lines) if x.lower() == "away form"), 0)
+    start = next((i for i in range(away_i + 1, len(lines)) if lines[i].lower() == "overall"), None)
+    if start is None:
         return None
-    values = re.findall(r"\*\*([+-]?\d+(?:\.\d+)?)\*\*", m.group(1))
-    if len(values) >= 8:
-        try:
-            return float(values[7])
-        except ValueError:
-            return None
-    return None
+    nums = []
+    for x in lines[start + 1 : start + 40]:
+        if x.lower() == "points per game":
+            break
+        n = _num_token(x)
+        if n is not None:
+            nums.append(n)
+        if len(nums) >= 8:
+            break
+    return nums[7] if len(nums) >= 8 else None
 
 
-_DATE_RE = re.compile(r"^\s*-\s*\*\*((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2})\*\*\s*$", re.I)
+_DATE_ONLY = re.compile(r"^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2}$", re.I)
+_SCORE_ONLY = re.compile(r"^(\d+)\s*-\s*(\d+)$")
+_EXCLUDE = {
+    "HT", "FT", "STATS", "TOTAL", "HOME", "AWAY", "SHOW 5 MORE GAMES",
+    "FIXTURES", "OVERALL", "GOALS", "CORNERS", "CARDS",
+}
+
+
+def _team_candidate(line: str) -> bool:
+    u = line.upper().strip()
+    if not u or u in _EXCLUDE:
+        return False
+    if _DATE_ONLY.fullmatch(line) or _SCORE_ONLY.fullmatch(line):
+        return False
+    if re.search(r"^(AVG|BTTS|OVER 2\.5|UNDER 2\.5|IN A FEW HOURS|GOAL TIMING)", u):
+        return False
+    if re.fullmatch(r"[+-]?\d+(?:\.\d+)?%?", line):
+        return False
+    return bool(re.search(r"[A-Za-zÀ-ÿ]", line)) and len(line) <= 80
 
 
 def _recent_matches(text: str) -> list[MatchResult]:
-    lines = text.splitlines()
+    lines = _visible_lines(text)
     matches: list[MatchResult] = []
     i = 0
     while i < len(lines):
-        dm = _DATE_RE.match(lines[i])
-        if not dm:
+        if not _DATE_ONLY.fullmatch(lines[i]):
             i += 1
             continue
-        date_label = dm.group(1)
+        date = lines[i]
         j = i + 1
-        chunk: list[str] = []
-        while j < len(lines) and not _DATE_RE.match(lines[j]) and j < i + 26:
-            chunk.append(lines[j])
+        while j < len(lines) and not _DATE_ONLY.fullmatch(lines[j]) and j < i + 24:
             j += 1
-        link_texts: list[str] = []
-        for raw in chunk:
-            for lm in re.finditer(r"\[([^\]]+)\]\([^)]+\)", raw):
-                link_texts.append(_clean(lm.group(1)))
-        score_idx = next((k for k, item in enumerate(link_texts) if re.fullmatch(r"\d+\s*-\s*\d+", item)), None)
-        if score_idx is not None and score_idx >= 1 and score_idx + 1 < len(link_texts):
-            home = link_texts[score_idx - 1]
-            away = link_texts[score_idx + 1]
-            hg, ag = map(int, re.findall(r"\d+", link_texts[score_idx]))
-            matches.append(MatchResult(date_label, home, away, hg, ag))
+        block = lines[i + 1 : j]
+        score_idx = next((k for k, x in enumerate(block) if _SCORE_ONLY.fullmatch(x)), None)
+        if score_idx is not None:
+            sm = _SCORE_ONLY.fullmatch(block[score_idx])
+            pre = [x for x in block[:score_idx] if _team_candidate(x)]
+            post = [x for x in block[score_idx + 1 :] if _team_candidate(x)]
+            if sm and pre and post:
+                matches.append(MatchResult(date, pre[-1], post[0], int(sm.group(1)), int(sm.group(2))))
         i = max(j, i + 1)
+
     seen = set()
-    output: list[MatchResult] = []
+    out: list[MatchResult] = []
     for m in matches:
         key = (m.date_label, canonical_team(m.home), canonical_team(m.away), m.home_goals, m.away_goals)
         if key in seen:
             continue
         seen.add(key)
-        output.append(m)
-    return output
+        out.append(m)
+    return out
 
 
 def parse_team_page(text: str) -> TeamProfile:
     raw = (text or "").replace("\u202f", " ").replace("\xa0", " ")
     if len(raw.strip()) < 1000:
         raise ValueError("Paste the complete FootyStats team page.")
-    h1 = re.search(r"(?m)^#\s+(.+?)\s*$", raw)
-    if not h1:
-        sm = re.search(r"(?mi)^\s*(?:\d{4}\s+)?(.+?)\s+Statistics\s*$", raw)
-        name = _clean(sm.group(1)) if sm else "Team"
+
+    # Prefer the Statistics heading: it normalises names such as Molde FK II -> Molde II.
+    m = re.search(r"(?mi)^\s*#{0,2}\s*(\d{4})\s+(.+?)\s+Statistics\s*$", raw)
+    if m:
+        season = int(m.group(1))
+        name = _clean(m.group(2))
     else:
-        name = _clean(h1.group(1))
-    stats_name = re.search(r"(?m)^##\s+\d{4}\s+(.+?)\s+Statistics\s*$", raw)
-    if stats_name:
-        name = _clean(stats_name.group(1))
-    season_match = re.search(r"\*\*(\d{4})\s*Season\*\*", raw, re.I)
-    season = int(season_match.group(1)) if season_match else None
+        h1 = re.search(r"(?m)^#\s+(.+?)\s*$", raw)
+        name = _clean(h1.group(1)) if h1 else "Team"
+        sm = re.search(r"(?i)\b(\d{4})\s+Season\b", _clean(raw))
+        season = int(sm.group(1)) if sm else None
+
     league = ""
-    league_match = re.search(r"(?m)^\*\*([^*\n]+)\*\*\s*\n\s*\*\*\d{4}\s*Season\*\*", raw)
-    if league_match:
-        league = _clean(league_match.group(1))
-    basic = "| **StatsOverallAt HomeAt Away**"
-    goals_table = "| **Team ShotsOverallAt HomeAt Away**"
-    over_table = "| **Over 0.5\\~5.5 Full-TimeOverallAt HomeAt Away**"
-    btts_table = "| **BTTS StatsOverallAt HomeAt Away**"
+    vis = _visible_lines(raw[:6000])
+    sidx = next((i for i, x in enumerate(vis) if re.fullmatch(r"\d{4}\s+Season", x, re.I)), None)
+    if sidx is not None:
+        for x in reversed(vis[max(0, sidx - 5) : sidx]):
+            if "Wins /" in x or x.lower().startswith("upcoming"):
+                continue
+            if re.search(r"division|league|liga|serie|premier|championship", x, re.I):
+                league = x
+                break
+
+    basic_start = r"StatsOverallAt HomeAt Away|Stats\s+Overall\s+At Home\s+At Away"
+    basic_end = (r"1st\s*/\s*2nd Half",)
+    over_start = r"Over\s*/\s*Under Goals"
+    over_end = (r"Both Teams To Score",)
+    btts_start = r"Both Teams To Score"
+    btts_end = (r"Corner Stats",)
+    shots_start = r"Shots,?\s*xG\s*&\s*Offsides"
+    shots_end = (r"Goal Kicks", r"Common Scorelines")
+
     return TeamProfile(
-        name=name, league=league, season=season,
-        ppg_overall=_overall_ppg(raw), ppg_home=_ppg_block(raw, "Home Form", "Away Form"), ppg_away=_ppg_block(raw, "Away Form", "Overall"),
-        wins_pct=_row_values(raw, "Wins", basic), draws_pct=_row_values(raw, "Draws", basic), losses_pct=_row_values(raw, "Losses", basic),
-        gf=_row_values(raw, "Scored / Match", basic), ga=_row_values(raw, "Conceded / Match", basic),
-        xgf=_row_values(raw, "xG For / Match", basic), xga=_row_values(raw, "xG Against / Match", basic),
-        avg_goals=_row_values(raw, "AVG (Match Goals Average)", basic), clean_sheets=_row_values(raw, "Clean Sheets %", basic), failed_to_score=_row_values(raw, "Failed to Score %", basic),
-        shots=_row_values(raw, "Shots Taken / Match", basic), shots_on_target=_row_values(raw, "Shots On Target / Match", goals_table),
-        over25=_row_values(raw, "Over 2.5", over_table), btts=_row_values(raw, "BTTS", btts_table),
-        matches=_recent_matches(raw), source_text=raw,
+        name=name,
+        league=league,
+        season=season,
+        ppg_overall=_overall_ppg(raw),
+        ppg_home=_form_ppg(raw, "Home Form", "Away Form"),
+        ppg_away=_form_ppg(raw, "Away Form", "Overall"),
+        wins_pct=_metric_triplet(raw, "Wins", basic_start, basic_end),
+        draws_pct=_metric_triplet(raw, "Draws", basic_start, basic_end),
+        losses_pct=_metric_triplet(raw, "Losses", basic_start, basic_end),
+        gf=_metric_triplet(raw, "Scored / Match", basic_start, basic_end),
+        ga=_metric_triplet(raw, "Conceded / Match", basic_start, basic_end),
+        xgf=_metric_triplet(raw, "xG For / Match", basic_start, basic_end),
+        xga=_metric_triplet(raw, "xG Against / Match", basic_start, basic_end),
+        avg_goals=_metric_triplet(raw, "AVG (Match Goals Average)", basic_start, basic_end),
+        clean_sheets=_metric_triplet(raw, "Clean Sheets %", basic_start, basic_end),
+        failed_to_score=_metric_triplet(raw, "Failed to Score %", basic_start, basic_end),
+        shots=_metric_triplet(raw, "Shots Taken / Match", basic_start, basic_end),
+        shots_on_target=_metric_triplet(raw, "Shots On Target / Match", shots_start, shots_end),
+        over25=_metric_triplet(raw, "Over 2.5", over_start, over_end),
+        btts=_metric_triplet(raw, "BTTS", btts_start, btts_end),
+        matches=_recent_matches(raw),
+        source_text=raw,
     )
 
 
