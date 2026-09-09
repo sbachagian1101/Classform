@@ -44,8 +44,9 @@ def main():
     scored["name"] = scored["beach_id"].map(beaches["name"])
     scored["region"] = scored["beach_id"].map(beaches["region"])
     scored["issued_utc"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%MZ")
+    scored["data_source"] = args.source
 
-    out = scored[OUT_COLUMNS + ["issued_utc"]].sort_values(["date", "beach_id"])
+    out = scored[OUT_COLUMNS + ["issued_utc", "data_source"]].sort_values(["date", "beach_id"])
     out_path = DATA_DIR / "outputs" / "latest_risk.csv"
     out.to_csv(out_path, index=False)
     print(f"wrote {len(out)} beach-days -> {out_path}")

@@ -57,6 +57,9 @@ if risk is None or risk.empty:
     st.warning("No forecast found. Run `python scripts/run_forecast.py` first.")
     st.stop()
 
+if "data_source" in risk.columns and str(risk["data_source"].iloc[0]) == "synthetic":
+    st.error("This forecast was scored on SYNTHETIC weather because the live fetch failed. Tiers shown are meaningless.")
+
 dates = sorted(risk["date"].unique())
 sel_date = st.select_slider("Forecast day", options=dates, value=dates[-1] if len(dates) == 1 else dates[min(len(dates) - 1, 7)],
                             format_func=lambda d: pd.Timestamp(d).strftime("%a %d %b"))
@@ -118,6 +121,10 @@ st.caption(
 )
 if VALIDATION_PATH.exists():
     val = pd.read_csv(VALIDATION_PATH)
+    if "features_source" in val.columns and str(val["features_source"].iloc[0]) == "synthetic":
+        st.error("Validation ran on SYNTHETIC features. Rebuild the feature table from Open-Meteo before reading these numbers.")
+    elif "features_span" in val.columns:
+        st.caption(f"Feature table covers {val['features_span'].iloc[0]}. Events outside that span are not scored.")
     show_cols = [c for c in ["events", "model", "n_events", "n", "roc_auc", "avg_precision", "hit_rate", "false_alarm_ratio"] if c in val.columns]
     st.dataframe(val[show_cols].style.format({"roc_auc": "{:.3f}", "avg_precision": "{:.3f}", "hit_rate": "{:.2f}",
                                               "false_alarm_ratio": "{:.2f}"}), width="stretch", hide_index=True)

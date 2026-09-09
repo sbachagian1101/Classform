@@ -47,12 +47,15 @@ if not exist "data\features\daily_features.csv" (
     echo First run: downloading weather and marine history from Open-Meteo since 2022.
     echo This takes a few minutes for 28 beaches. Press Ctrl+C to skip and use synthetic data instead.
     echo.
-    python scripts\build_features.py --source openmeteo --start 2022-01-01
+    python scripts\build_features.py --source openmeteo --start 2012-01-01
     if errorlevel 1 (
         echo.
-        echo History download failed. Falling back to a synthetic dry run so the app still opens.
-        python scripts\make_synthetic.py
-        python scripts\build_features.py --source synthetic
+        echo ***********************************************************************
+        echo  HISTORY DOWNLOAD FAILED. Read the error above and report it.
+        echo  Validation will be skipped. The forecast below is still live.
+        echo ***********************************************************************
+        echo.
+        pause
     )
 )
 
@@ -60,15 +63,23 @@ echo.
 echo Scoring the coming week...
 python scripts\run_forecast.py --days 7
 if errorlevel 1 (
-    echo Live forecast failed. Using the synthetic tail so the app still opens.
+    echo.
+    echo ***********************************************************************
+    echo  LIVE FORECAST FAILED. Read the error above and report it.
+    echo  Opening the app on synthetic data so you can still see the layout.
+    echo ***********************************************************************
+    echo.
+    pause
     if not exist "data\raw\synthetic_hourly.csv" python scripts\make_synthetic.py
     python scripts\run_forecast.py --source synthetic
 )
 
-echo.
-echo Validating priors against the Mauritian event table (medium confidence and above)...
-python scripts\validate.py --events data\events\mru_events.csv --min-confidence medium --tune
-echo.
+if exist "data\features\daily_features.csv" (
+    echo.
+    echo Validating priors against the Mauritian event table (medium confidence and above)...
+    python scripts\validate.py --events data\events\mru_events.csv --min-confidence medium --tune
+    echo.
+)
 
 echo Starting app...
 python -m streamlit run app.py --server.headless=false --browser.gatherUsageStats=false

@@ -29,6 +29,11 @@ def main():
     params = load_params()
     settings = ValidationSettings.from_dict(params.get("validation"))
     feats = pd.read_csv(args.features, parse_dates=["date"])
+    source = str(feats["data_source"].iloc[0]) if "data_source" in feats.columns and len(feats) else "unknown"
+    span = f"{feats['date'].min().date()} to {feats['date'].max().date()}" if len(feats) else "empty"
+    print(f"features: {len(feats):,} beach-days, {span}, source = {source}")
+    if source == "synthetic":
+        print("WARNING: features are SYNTHETIC. The metrics below do not measure real skill.")
     scored = score_features(feats, params)
 
     tables = []
@@ -42,7 +47,9 @@ def main():
         tables.append(res)
     if tables:
         report = pd.concat(tables, ignore_index=True)
-        pd.set_option("display.width", 200)
+        report.insert(1, "features_source", source)
+        report.insert(2, "features_span", span)
+        pd.set_option("display.width", 220)
         print(report.round(3).to_string(index=False))
         report.to_csv(DATA_DIR / "outputs" / "validation.csv", index=False)
 

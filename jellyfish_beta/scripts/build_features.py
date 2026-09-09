@@ -38,7 +38,10 @@ def main():
         hourly = pd.read_csv(args.hourly)
 
     feats = build_daily_features(hourly, beaches, calm_wind_ms=params["cubozoa"]["calm_wind_ms"])
+    feats["data_source"] = args.source
     feats.to_csv(args.out, index=False)
+    if args.source == "synthetic":
+        print("NOTE: these features are SYNTHETIC. Validation on them says nothing about real skill.")
     print(f"wrote {len(feats):,} beach-days for {feats['beach_id'].nunique()} beaches -> {args.out}")
 
 
