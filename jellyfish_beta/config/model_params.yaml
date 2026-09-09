@@ -1,0 +1,41 @@
+# Initial parameter priors for the beta. These are NOT fitted to Mauritian
+# data yet. They encode the mechanisms reported in the Sydney bluebottle
+# (Physalia) work and the Queensland Irukandji work, scaled to give a
+# sensible 0-1 risk. Tune with scripts/validate.py once the event table
+# has enough rows.
+
+physalia:
+  # risk = sigmoid(bias + w_stress_24h*S24 + w_stress_72h*S72 + w_swell_24h*W24)
+  # S = signed onshore wind stress proxy, mean of sign(u)*u^2 over the window (m^2/s^2)
+  # W = onshore swell component (m), mean over the window
+  bias: -3.0
+  w_stress_24h: 0.05
+  w_stress_72h: 0.03
+  w_swell_24h: 0.8
+
+cubozoa:
+  # risk = sigmoid(bias + w_calm*min(calm_days, max_calm_days)
+  #                     + w_sst*(sst - sst_threshold_c)
+  #                     + w_rain*rain_3d_mm) * lagoon_factor
+  calm_wind_ms: 5.0        # daily mean wind below this counts as a calm day
+  max_calm_days: 5
+  sst_threshold_c: 26.0
+  bias: -2.5
+  w_calm: 0.8
+  w_sst: 0.5
+  w_rain: 0.02
+  non_lagoon_factor: 0.3   # cubozoan risk is discounted on open-coast beaches
+
+combine:
+  # overall score is the max of the hazard components, each scaled by a weight
+  weights:
+    physalia: 1.0
+    cubozoa: 1.0
+  tiers:
+    moderate: 0.35
+    high: 0.60
+
+validation:
+  lead_days: 2             # score = max risk over [D-lead_days, D]
+  alert_budget: 0.10       # fraction of beach-days allowed to be on alert
+  negative_buffer_days: 3  # beach-days this close to an event are not used as negatives

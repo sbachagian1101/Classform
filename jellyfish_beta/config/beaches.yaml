@@ -1,0 +1,101 @@
+# Target beaches / lagoon segments for the Mauritius jellyfish beta.
+#
+# facing_deg : compass bearing (degrees, 0 = N, 90 = E) pointing from the beach
+#              OUT TO SEA (shore-normal). Wind or swell arriving FROM this
+#              bearing is fully onshore. These are approximate, read off the
+#              coastline orientation, and should be verified in QGIS or on the
+#              ground before the numbers are trusted.
+# lagoon     : true if the beach sits inside a fringing reef lagoon.
+# region     : coarse grouping used for reporting only.
+beaches:
+  - id: grand_baie
+    name: Grand Baie
+    lat: -20.010
+    lon: 57.580
+    facing_deg: 350
+    lagoon: true
+    region: north
+  - id: pereybere
+    name: Pereybere
+    lat: -19.995
+    lon: 57.590
+    facing_deg: 335
+    lagoon: true
+    region: north
+  - id: mont_choisy
+    name: Mont Choisy
+    lat: -20.017
+    lon: 57.560
+    facing_deg: 300
+    lagoon: true
+    region: north
+  - id: trou_aux_biches
+    name: Trou aux Biches
+    lat: -20.035
+    lon: 57.545
+    facing_deg: 315
+    lagoon: true
+    region: north
+  - id: poste_lafayette
+    name: Poste Lafayette
+    lat: -20.130
+    lon: 57.760
+    facing_deg: 70
+    lagoon: true
+    region: east
+  - id: belle_mare
+    name: Belle Mare
+    lat: -20.195
+    lon: 57.775
+    facing_deg: 90
+    lagoon: true
+    region: east
+  - id: trou_deau_douce
+    name: Trou d'Eau Douce
+    lat: -20.240
+    lon: 57.790
+    facing_deg: 90
+    lagoon: true
+    region: east
+  - id: pointe_desny
+    name: Pointe d'Esny
+    lat: -20.425
+    lon: 57.730
+    facing_deg: 100
+    lagoon: true
+    region: southeast
+  - id: blue_bay
+    name: Blue Bay
+    lat: -20.445
+    lon: 57.715
+    facing_deg: 150
+    lagoon: true
+    region: southeast
+  - id: gris_gris
+    name: Gris Gris
+    lat: -20.525
+    lon: 57.525
+    facing_deg: 180
+    lagoon: false
+    region: south
+  - id: le_morne
+    name: Le Morne
+    lat: -20.455
+    lon: 57.315
+    facing_deg: 240
+    lagoon: true
+    region: southwest
+  - id: tamarin
+    name: Tamarin
+    lat: -20.325
+    lon: 57.370
+    facing_deg: 270
+    lagoon: false
+    region: west
+  - id: flic_en_flac
+    name: Flic en Flac
+    lat: -20.274
+    lon: 57.363
+    facing_deg: 275
+    lagoon: true
+    region: west
