@@ -46,11 +46,18 @@ def test_get_does_not_retry_400(monkeypatch):
     assert len(sess.calls) == 1
 
 
-def test_get_retries_429_then_succeeds(monkeypatch):
+def test_get_retries_503_then_succeeds(monkeypatch):
     monkeypatch.setattr(om.time, "sleep", lambda s: None)
-    sess = FakeSession([FakeResp(429, None, "rate limited"), FakeResp(200, {"hourly": {"time": []}})])
+    sess = FakeSession([FakeResp(503, None, "unavailable"), FakeResp(200, {"hourly": {"time": []}})])
     out = om._get("https://x", {}, session=sess, retries=3)
     assert out == {"hourly": {"time": []}} and len(sess.calls) == 2
+
+
+def test_get_429_without_window_is_minutely(monkeypatch):
+    sess = FakeSession([FakeResp(429, None, "rate limited")])
+    with pytest.raises(om.RateLimited) as exc:
+        om._get("https://x", {}, session=sess, retries=3)
+    assert exc.value.window == "minute" and len(sess.calls) == 1
 
 
 def test_marine_falls_back_to_waves_then_empty(monkeypatch):
@@ -93,3 +100,54 @@ def test_history_raises_when_nothing_fetched(monkeypatch):
     sess = FakeSession([FakeResp(400, {"reason": "nope"})])
     with pytest.raises(om.OpenMeteoError), pytest.warns(UserWarning):
         om.fetch_beach_history(beaches, date(2024, 1, 1), date(2024, 1, 2), session=sess, progress=None)
+
+
+def test_429_raises_rate_limited_with_window():
+    sess = FakeSession([FakeResp(429, {"reason": "Hourly API request limit exceeded. Please try again in the next hour."})])
+    with pytest.raises(om.RateLimited) as exc:
+        om._get("https://x", {}, session=sess, retries=3)
+    assert exc.value.window == "hour" and len(sess.calls) == 1
+    sess = FakeSession([FakeResp(429, {"reason": "Daily API request limit exceeded"})])
+    with pytest.raises(om.RateLimited) as exc:
+        om._get("https://x", {}, session=sess)
+    assert exc.value.window == "day"
+
+
+def test_seconds_until_next_hour():
+    # 10:15:00 -> 45 min to 11:00 plus margin
+    assert om.seconds_until_next_hour(now=10 * 3600 + 15 * 60, margin_s=45) == 45 * 60 + 45
+
+
+def test_history_waits_out_hourly_quota_and_resumes(monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(om.time, "sleep", lambda s: sleeps.append(s))
+    beaches = pd.DataFrame([{"id": "a", "name": "A", "lat": -20.0, "lon": 57.5}])
+    hourly = {"reason": "Hourly API request limit exceeded"}
+    sess = FakeSession([FakeResp(429, hourly), FakeResp(200, _ok_hourly(om.WEATHER_VARS)), FakeResp(200, _ok_hourly(om.MARINE_VARS))])
+    df = om.fetch_beach_history(beaches, date(2024, 1, 1), date(2024, 12, 31), session=sess, progress=None)
+    assert len(df) == 2 and any(s > 60 for s in sleeps)
+
+
+def test_history_daily_quota_raises(monkeypatch):
+    monkeypatch.setattr(om.time, "sleep", lambda s: None)
+    beaches = pd.DataFrame([{"id": "a", "name": "A", "lat": -20.0, "lon": 57.5}])
+    sess = FakeSession([FakeResp(429, {"reason": "Daily API request limit exceeded"})])
+    with pytest.raises(om.RateLimited):
+        om.fetch_beach_history(beaches, date(2024, 1, 1), date(2024, 12, 31), session=sess, progress=None)
+
+
+def test_history_skips_marine_before_archive_start_and_uses_cache(monkeypatch, tmp_path):
+    monkeypatch.setattr(om.time, "sleep", lambda s: None)
+    beaches = pd.DataFrame([{"id": "a", "name": "A", "lat": -20.0, "lon": 57.5}])
+    # 2019: weather only (no marine call). 2021: weather + marine.
+    sess = FakeSession([FakeResp(200, _ok_hourly(om.WEATHER_VARS)),
+                        FakeResp(200, _ok_hourly(om.WEATHER_VARS)), FakeResp(200, _ok_hourly(om.MARINE_VARS))])
+    df = om.fetch_beach_history(beaches, date(2019, 1, 1), date(2019, 12, 31), session=sess, progress=None, cache_dir=tmp_path)
+    assert len(sess.calls) == 1 and (tmp_path / "a_2019.csv").exists()
+    df = om.fetch_beach_history(beaches, date(2021, 1, 1), date(2021, 12, 31), session=sess, progress=None, cache_dir=tmp_path)
+    assert len(sess.calls) == 3 and sess.calls[2][0] == om.MARINE_URL
+    # Second run of the cached years: no network at all.
+    sess2 = FakeSession([])
+    d19 = om.fetch_beach_history(beaches, date(2019, 1, 1), date(2019, 12, 31), session=sess2, progress=None, cache_dir=tmp_path)
+    d21 = om.fetch_beach_history(beaches, date(2021, 1, 1), date(2021, 12, 31), session=sess2, progress=None, cache_dir=tmp_path)
+    assert sess2.calls == [] and len(d19) == 2 and len(d21) == 2 and "wave_height_m" in d21.columns

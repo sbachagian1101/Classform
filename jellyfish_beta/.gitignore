@@ -9,3 +9,4 @@ data/outputs/*.csv
 !data/events/*.csv
 .streamlit/secrets.toml
 data/events/synthetic_events.csv
+data/raw/openmeteo_cache/

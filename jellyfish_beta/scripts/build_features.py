@@ -28,7 +28,7 @@ def main():
 
     if args.source == "openmeteo":
         from jellymru.fetch.openmeteo import fetch_beach_history
-        hourly = fetch_beach_history(beaches, args.start, args.end)
+        hourly = fetch_beach_history(beaches, args.start, args.end, cache_dir=DATA_DIR / "raw" / "openmeteo_cache")
         hourly.to_csv(DATA_DIR / "raw" / "openmeteo_hourly.csv", index=False)
     elif args.source == "synthetic":
         hourly = pd.read_csv(DATA_DIR / "raw" / "synthetic_hourly.csv")

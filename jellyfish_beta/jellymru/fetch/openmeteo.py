@@ -59,7 +59,26 @@ class OpenMeteoError(RuntimeError):
         self.reason = reason
 
 
-_RETRY_STATUSES = {429, 500, 502, 503, 504}
+class RateLimited(OpenMeteoError):
+    """A 429 whose reason names the quota window: 'minute', 'hour' or 'day'."""
+
+    def __init__(self, reason: str, url: str = ""):
+        super().__init__(429, reason, url)
+        r = reason.lower()
+        self.window = "day" if "daily" in r or "day" in r else "hour" if "hour" in r else "minute"
+
+
+_RETRY_STATUSES = {500, 502, 503, 504}
+
+# The Open-Meteo marine archive only reaches back a few years; asking for
+# earlier years returns empty frames but still costs quota.
+MARINE_ARCHIVE_START = date(2021, 1, 1)
+
+
+def seconds_until_next_hour(now: float | None = None, margin_s: int = 45) -> int:
+    """Seconds from now until just after the top of the next clock hour."""
+    now = time.time() if now is None else now
+    return int(3600 - (now % 3600)) + margin_s
 
 
 def _get(url: str, params: dict, session=None, retries: int = 4, backoff_s: float = 2.0) -> dict:
@@ -80,6 +99,8 @@ def _get(url: str, params: dict, session=None, retries: int = 4, backoff_s: floa
             reason = resp.json().get("reason", "") or resp.text[:200]
         except ValueError:
             reason = resp.text[:200]
+        if resp.status_code == 429:
+            raise RateLimited(reason, getattr(resp, "url", url))
         err = OpenMeteoError(resp.status_code, reason, getattr(resp, "url", url))
         if resp.status_code in _RETRY_STATUSES:
             last = err
@@ -163,32 +184,79 @@ def _year_chunks(start: date, end: date):
         y = date(y.year + 1, 1, 1)
 
 
-def fetch_beach_history(beaches: pd.DataFrame, start: date, end: date, pause_s: float = 0.5,
-                        session=None, progress=print) -> pd.DataFrame:
-    """Hourly history for every beach, fetched one calendar year at a time.
+def _fetch_chunk(b, y0: date, y1: date, session):
+    """Weather plus marine for one beach and one year chunk."""
+    w = fetch_weather_history(b["lat"], b["lon"], y0, y1, session)
+    if y1 >= MARINE_ARCHIVE_START:
+        m = fetch_marine(b["lat"], b["lon"], start=max(y0, MARINE_ARCHIVE_START), end=y1, session=session)
+    else:
+        m = _hourly_frame({}, MARINE_RENAME)
+    return _merge(w, m, b["id"])
 
-    A beach whose weather request fails is skipped with a warning; a beach
-    whose marine request fails keeps its wind data. Raises only if nothing at
-    all could be fetched.
+
+def _with_quota_waits(fn, progress, max_waits: int = 3):
+    """Call fn(); on a per-minute or per-hour quota, wait for the window to reset and retry."""
+    waits = 0
+    while True:
+        try:
+            return fn()
+        except RateLimited as exc:
+            if exc.window == "day" or waits >= max_waits:
+                raise
+            wait = 65 if exc.window == "minute" else seconds_until_next_hour()
+            if progress:
+                progress(f"  Open-Meteo {exc.window}ly quota reached; waiting {wait // 60} min "
+                         f"(progress so far is cached, Ctrl+C and rerun later is also fine)")
+            time.sleep(wait)
+            waits += 1
+
+
+def fetch_beach_history(beaches: pd.DataFrame, start: date, end: date, pause_s: float = 0.5,
+                        session=None, progress=print, cache_dir=None) -> pd.DataFrame:
+    """Hourly history for every beach, one calendar year at a time.
+
+    * Each beach-year is cached as CSV in ``cache_dir`` and never re-fetched,
+      so a rerun after a quota error resumes where it stopped.
+    * Marine data is not requested before MARINE_ARCHIVE_START.
+    * Per-minute and per-hour quotas are waited out; a daily quota raises.
+    * A beach whose weather request fails is skipped with a warning; raises
+      only if nothing at all could be fetched.
     """
+    from pathlib import Path
+
+    cache = Path(cache_dir) if cache_dir else None
+    if cache:
+        cache.mkdir(parents=True, exist_ok=True)
     frames, failed = [], []
     for _, b in beaches.iterrows():
-        beach_frames = []
+        beach_frames, fetched = [], 0
         for y0, y1 in _year_chunks(start, end):
+            path = cache / f"{b['id']}_{y0.year}.csv" if cache else None
+            # A cached chunk is complete only if it ended on 31 Dec; a partial current year is refetched.
+            if path and path.exists() and y1 == date(y0.year, 12, 31):
+                df = pd.read_csv(path)
+                df["time"] = pd.to_datetime(df["time"], utc=True)
+                beach_frames.append(df)
+                continue
             try:
-                w = fetch_weather_history(b["lat"], b["lon"], y0, y1, session)
+                df = _with_quota_waits(lambda: _fetch_chunk(b, y0, y1, session), progress)
+            except RateLimited:
+                raise
             except OpenMeteoError as exc:
                 warnings.warn(f"{b['id']} {y0.year}: weather history failed: {exc}")
                 continue
-            m = fetch_marine(b["lat"], b["lon"], start=y0, end=y1, session=session)
-            beach_frames.append(_merge(w, m, b["id"]))
+            if path:
+                df.to_csv(path, index=False)
+            beach_frames.append(df)
+            fetched += 1
             time.sleep(pause_s)
         if beach_frames:
             # Drop all-NA columns (empty marine years) before concat; pandas
             # re-adds them as float NaN and stops warning about dtype inference.
             frames.append(pd.concat([f.dropna(axis=1, how="all") for f in beach_frames], ignore_index=True))
             if progress:
-                progress(f"  {b['name']}: {sum(len(f) for f in beach_frames):,} hourly rows")
+                progress(f"  {b['name']}: {sum(len(f) for f in beach_frames):,} hourly rows"
+                         f" ({fetched} chunks fetched, {len(beach_frames) - fetched} from cache)")
         else:
             failed.append(b["id"])
     if not frames:

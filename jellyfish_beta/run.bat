@@ -45,13 +45,16 @@ if errorlevel 1 (
 if not exist "data\features\daily_features.csv" (
     echo.
     echo First run: downloading weather and marine history from Open-Meteo since 2012.
-    echo One line per beach as it completes; 28 beaches take 15 to 30 minutes.
+    echo One line per beach as it completes. Each beach-year is cached, so if the
+    echo Open-Meteo free quota runs out the script waits for the next hour, and a
+    echo rerun resumes where it stopped.
     echo.
     python scripts\build_features.py --source openmeteo --start 2012-01-01
     if errorlevel 1 (
         echo.
         echo ***********************************************************************
         echo  HISTORY DOWNLOAD FAILED. Read the error above and report it.
+        echo  If it mentions a daily quota, rerun tomorrow: progress is cached.
         echo  Validation will be skipped. The forecast below is still live.
         echo ***********************************************************************
         echo.
