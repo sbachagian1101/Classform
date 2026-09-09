@@ -99,3 +99,109 @@ beaches:
     facing_deg: 275
     lagoon: true
     region: west
+  # --- added from the press harvest: beaches named in NCG communiqués ---
+  - id: la_cuvette
+    name: La Cuvette
+    lat: -20.003
+    lon: 57.583
+    facing_deg: 330
+    lagoon: true
+    region: north
+  - id: bain_boeuf
+    name: Bain Boeuf
+    lat: -19.985
+    lon: 57.607
+    facing_deg: 10
+    lagoon: true
+    region: north
+  - id: grand_gaube
+    name: Grand Gaube
+    lat: -20.008
+    lon: 57.665
+    facing_deg: 20
+    lagoon: true
+    region: north
+  - id: pointe_aux_piments
+    name: Pointe aux Piments
+    lat: -20.062
+    lon: 57.525
+    facing_deg: 285
+    lagoon: true
+    region: northwest
+  - id: baie_du_tombeau
+    name: Baie du Tombeau
+    lat: -20.112
+    lon: 57.498
+    facing_deg: 285
+    lagoon: true
+    region: northwest
+  - id: le_goulet
+    name: Le Goulet
+    lat: -20.105
+    lon: 57.503
+    facing_deg: 280
+    lagoon: true
+    region: northwest
+  - id: roches_noires
+    name: Roches Noires
+    lat: -20.108
+    lon: 57.740
+    facing_deg: 60
+    lagoon: true
+    region: east
+  - id: bras_deau
+    name: Bras d'Eau
+    lat: -20.118
+    lon: 57.752
+    facing_deg: 70
+    lagoon: true
+    region: east
+  - id: ile_aux_cerfs
+    name: Ile aux Cerfs
+    lat: -20.270
+    lon: 57.805
+    facing_deg: 90
+    lagoon: true
+    region: east
+  - id: albion
+    name: Albion
+    lat: -20.213
+    lon: 57.395
+    facing_deg: 275
+    lagoon: true
+    region: west
+  - id: la_preneuse
+    name: La Preneuse
+    lat: -20.345
+    lon: 57.360
+    facing_deg: 270
+    lagoon: true
+    region: west
+  - id: riviere_noire
+    name: Riviere Noire
+    lat: -20.365
+    lon: 57.365
+    facing_deg: 265
+    lagoon: true
+    region: west
+  - id: la_prairie
+    name: La Prairie
+    lat: -20.487
+    lon: 57.345
+    facing_deg: 240
+    lagoon: true
+    region: southwest
+  - id: ile_aux_benitiers
+    name: Ile aux Benitiers
+    lat: -20.435
+    lon: 57.325
+    facing_deg: 250
+    lagoon: true
+    region: southwest
+  - id: la_cambuse
+    name: La Cambuse
+    lat: -20.468
+    lon: 57.688
+    facing_deg: 170
+    lagoon: true
+    region: southeast

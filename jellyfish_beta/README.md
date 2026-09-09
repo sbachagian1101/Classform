@@ -17,9 +17,12 @@ Three components, each independently testable:
 Outputs are a per-beach, per-day risk score in [0, 1] and a tier
 (low / moderate / high), served by a Streamlit dashboard.
 
-**Status:** scaffold. Parameters in `config/model_params.yaml` are priors from
-other regions and have not been fitted to Mauritian events. The event table
-`data/events/mru_events.csv` is empty and is the first thing to fill.
+**Status:** scaffold with a first label set. Parameters in `config/model_params.yaml`
+are priors from other regions and have not been fitted to Mauritian events.
+`data/events/mru_events.csv` holds 91 press- and forum-sourced rows (66 dated to
+the day) compiled from search snippets; see `data/events/HARVEST_LOG.md` for
+provenance and confidence. Confirming those dates on the source pages is the
+next step.
 
 ## Layout
 
@@ -41,6 +44,7 @@ jellyfish_beta/
 │   ├── risk.py               combine hazards into score and tier
 │   ├── validate.py           sparse-label validation, climatology baseline, LOYO tuning
 │   ├── synthetic.py          offline synthetic climate and events for dry runs
+│   ├── harvest.py            beach aliases, French dates, weekday-year resolution, RSS parsing
 │   ├── fetch/
 │   │   ├── openmeteo.py      keyless history and forecast (beta source)
 │   │   ├── era5.py           ERA5 winds via CDS (operational source)
@@ -115,8 +119,8 @@ this folder is its own repository.
 ## What to do first
 
 1. Verify beach positions and `facing_deg` bearings in `config/beaches.yaml`.
-2. Mine events into `data/events/mru_events.csv` (Coast Guard, Beach Authority,
-   press, Tripadvisor, hospital records). Target 50 to 150 dated events.
+2. Confirm the dates of the harvested events on their source pages, then keep
+   mining (Coast Guard log, Beach Authority, hospital records). Target 150+ dated events.
 3. Run the Open-Meteo history and the validator. Expect the Physalia index to
    show skill first; the cubozoan index is the open question.
 4. Start a reporting form so lifeguards and the public add presence and
