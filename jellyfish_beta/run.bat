@@ -67,7 +67,7 @@ if errorlevel 1 (
 
 echo.
 echo Validating priors against the Mauritian event table (medium confidence and above)...
-python scripts\validate.py --events data\events\mru_events.csv --min-confidence medium
+python scripts\validate.py --events data\events\mru_events.csv --min-confidence medium --tune
 echo.
 
 echo Starting app...

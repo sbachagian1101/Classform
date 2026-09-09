@@ -11,6 +11,8 @@ import streamlit as st
 ROOT = Path(__file__).resolve().parent
 RISK_PATH = ROOT / "data" / "outputs" / "latest_risk.csv"
 EVENTS_PATH = ROOT / "data" / "events" / "mru_events.csv"
+VALIDATION_PATH = ROOT / "data" / "outputs" / "validation.csv"
+TUNING_PATH = ROOT / "data" / "outputs" / "tuning_physalia.csv"
 BEACHES_PATH = ROOT / "config" / "beaches.yaml"
 
 TIER_COLOR = {"low": "#2e8b57", "moderate": "#e0a800", "high": "#c0392b"}
@@ -107,5 +109,23 @@ if not events.empty:
     ev = events[events["beach_id"] == beach_id].sort_values("date", ascending=False)
     st.dataframe(ev[["date", "species_group", "count_class", "source_type", "confidence", "source_url"]],
                  width="stretch", hide_index=True)
+
+st.subheader("Validation against recorded events")
+st.caption(
+    "Model versus a leave-one-year-out seasonal climatology on the dated Mauritian events. "
+    "Score = max risk over the two days before each event; hit_rate = share of events caught with 10 percent of beach-days on alert; "
+    "avg_precision and roc_auc are relative to pseudo-absences, so compare rows, not absolute values."
+)
+if VALIDATION_PATH.exists():
+    val = pd.read_csv(VALIDATION_PATH)
+    show_cols = [c for c in ["events", "model", "n_events", "n", "roc_auc", "avg_precision", "hit_rate", "false_alarm_ratio"] if c in val.columns]
+    st.dataframe(val[show_cols].style.format({"roc_auc": "{:.3f}", "avg_precision": "{:.3f}", "hit_rate": "{:.2f}",
+                                              "false_alarm_ratio": "{:.2f}"}), width="stretch", hide_index=True)
+    if TUNING_PATH.exists():
+        with st.expander("Leave-one-year-out tuning of the Physalia weights"):
+            st.dataframe(pd.read_csv(TUNING_PATH), width="stretch", hide_index=True)
+else:
+    st.info("No validation output yet. Run `python scripts/validate.py --events data/events/mru_events.csv --min-confidence medium --tune` "
+            "with a feature table that covers the event years, then reload.")
 
 st.caption(f"Issued {risk['issued_utc'].iloc[0]} UTC. Beach positions and orientations are approximate.")
