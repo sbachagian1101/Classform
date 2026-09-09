@@ -44,8 +44,8 @@ if errorlevel 1 (
 
 if not exist "data\features\daily_features.csv" (
     echo.
-    echo First run: downloading weather and marine history from Open-Meteo since 2022.
-    echo This takes a few minutes for 28 beaches. Press Ctrl+C to skip and use synthetic data instead.
+    echo First run: downloading weather and marine history from Open-Meteo since 2012.
+    echo One line per beach as it completes; 28 beaches take 15 to 30 minutes.
     echo.
     python scripts\build_features.py --source openmeteo --start 2012-01-01
     if errorlevel 1 (

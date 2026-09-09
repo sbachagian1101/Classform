@@ -184,7 +184,9 @@ def fetch_beach_history(beaches: pd.DataFrame, start: date, end: date, pause_s: 
             beach_frames.append(_merge(w, m, b["id"]))
             time.sleep(pause_s)
         if beach_frames:
-            frames.append(pd.concat(beach_frames, ignore_index=True))
+            # Drop all-NA columns (empty marine years) before concat; pandas
+            # re-adds them as float NaN and stops warning about dtype inference.
+            frames.append(pd.concat([f.dropna(axis=1, how="all") for f in beach_frames], ignore_index=True))
             if progress:
                 progress(f"  {b['name']}: {sum(len(f) for f in beach_frames):,} hourly rows")
         else:
