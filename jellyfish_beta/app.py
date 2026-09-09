@@ -77,11 +77,30 @@ with right:
 st.subheader("Beach detail")
 beach_id = st.selectbox("Beach", options=list(beaches["id"]), format_func=lambda b: beaches.loc[b, "name"])
 series = risk[risk["beach_id"] == beach_id].set_index("date").sort_index()
+
 c1, c2 = st.columns(2)
 with c1:
-    st.line_chart(series[["physalia_risk", "cubozoa_risk", "risk_score"]])
+    st.markdown("**Hazard components** (0 to 1). The overall score is the larger of the two.")
+    st.line_chart(series[["physalia_risk", "cubozoa_risk"]], color=["#1f77b4", "#d62728"])
 with c2:
-    st.line_chart(series[["onshore_wind_mean", "wind_speed_mean"]])
+    st.markdown("**Overall risk score** with tier thresholds.")
+    score = series[["risk_score"]].copy()
+    score["moderate threshold"] = 0.35
+    score["high threshold"] = 0.60
+    st.line_chart(score, color=["#333333", "#e0a800", "#c0392b"])
+
+c3, c4 = st.columns(2)
+with c3:
+    st.markdown("**Wind** (m/s). Onshore is positive toward the beach. Days below the calm line add to the cubozoan index.")
+    wind = series[["wind_speed_mean", "onshore_wind_mean"]].copy()
+    wind["calm threshold"] = 5.0
+    st.line_chart(wind, color=["#1f77b4", "#2ca02c", "#999999"])
+with c4:
+    st.markdown("**Day by day**")
+    detail = series[["tier", "risk_score", "calm_days", "sst_mean", "onshore_stress_72h", "onshore_swell_24h"]].copy()
+    detail.index = detail.index.strftime("%a %d %b")
+    st.dataframe(detail.style.format({"risk_score": "{:.2f}", "sst_mean": "{:.1f}", "onshore_stress_72h": "{:.0f}",
+                                      "onshore_swell_24h": "{:.2f}"}), width="stretch")
 
 if not events.empty:
     st.subheader("Recorded events at this beach")
