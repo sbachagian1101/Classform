@@ -1,89 +1,165 @@
 # Eligibility profile for the opportunity sweeper.
 #
-# These entries were INFERRED from names only (no CV / company profile / NGO
-# profile text was ever supplied) — treat every keyword list here as a rough
-# starting guess, not ground truth. Edit freely; the sweeper re-reads this
-# file on every run, so changes take effect on the next hourly sweep with no
-# code changes needed.
+# Built from: CV_Bacha_Gian_Suraj_merged.pdf, EMCL_Activity_Report_2025_2026.pdf,
+# and CORAL_GARDEN_CONSERVATION.pdf (organisation profile), supplied 2026-09-16.
 #
 # How matching works (see matcher.py): each opportunity's title+description
-# is checked against every persona's keywords. Any keyword hit adds to that
-# persona's score; geography and opportunity-type hits add a smaller bonus.
-# An opportunity can match more than one persona (e.g. a coral-reef grant can
-# match both "company" and "ngo").
+# is checked against every persona's keywords, geography, opportunity_types
+# and trusted_funders. A trusted_funders hit is the strongest signal (these
+# are named organisations that already fund/employ this persona) and is
+# weighted highest. An opportunity can match more than one persona — e.g. a
+# CEPF coral-reef grant would match both "company" and "ngo".
 
 personas:
   individual:
-    label: "Suraj Bacha Gian (CV)"
+    label: "Suraj Bacha Gian (Marine Conservation Scientist)"
     keywords:
-      - marine
-      - environmental
-      - coastal
-      - sustainability
-      - blue economy
-      - ocean
-      - conservation
-      - marine biology
-      - project management
-      - consultant
-      - environmental impact assessment
-      - climate resilience
+      - marine conservation
+      - coral reef
+      - coral restoration
+      - coral culture
+      - coral farming
+      - coral bleaching
+      - ecosystem restoration
+      - reef rehabilitation
+      - Crown-of-Thorns
+      - COTS
+      - ichthyoplankton
+      - DNA barcoding
+      - marine biotechnology
+      - biochemistry
+      - microbiology
+      - GIS
+      - remote sensing
+      - habitat mapping
+      - benthic mapping
+      - bathymetric
+      - species distribution modelling
+      - sustainable fisheries
+      - aquaculture
+      - climate change adaptation
+      - ecosystem resilience
+      - marine biologist
+      - marine scientist
+      - reef ecology
+      - biodiversity monitoring
+      - environmental monitoring
     geography:
       - Mauritius
+      - Rodrigues
+      - Western Indian Ocean
+      - Comoros
       - Indian Ocean
+      - Small Island Developing States
+      - SIDS
       - Africa
-      - remote
-      - international
     opportunity_types:
       - job
       - consultancy
       - short-term contract
       - technical assistance
+      - individual consultant
+      - project lead
+      - project manager
+      - focal point
+    trusted_funders:
+      - UNDP
+      - Adaptation Fund
+      - GEF
+      - Global Environment Facility
+      - CEPF
+      - Critical Ecosystem Partnership Fund
+      - UNEP
+      - UNIDO
+      - Indian Ocean Commission
+      - WIOMSA
+      - IOC-UNESCO
 
   company:
-    label: "Eco Marine Consultants Ltd (Mauritius)"
+    label: "Eco Marine Consultants Ltd (EMCL)"
     keywords:
       - marine consultancy
+      - environmental consultancy
+      - ecological assessment
+      - biodiversity monitoring
+      - marine and coastal habitat mapping
+      - coastal habitat mapping
+      - environmental monitoring
+      - ecosystem restoration
+      - coral reef restoration
+      - coral culture
+      - COTS monitoring
+      - GIS
+      - remote sensing
       - environmental impact assessment
       - EIA
-      - coastal engineering
+      - technical reporting
+      - donor-funded project
       - marine spatial planning
       - blue economy
-      - fisheries
-      - aquaculture
-      - ocean governance
-      - environmental consulting
-      - coastal management
-      - marine survey
+      - ocean technology
+      - marine observation
+      - digital conservation
+      - stakeholder engagement
+      - climate technology innovation
     geography:
       - Mauritius
+      - Rodrigues
+      - Western Indian Ocean
+      - Comoros
       - Indian Ocean Commission
-      - East Africa
       - Small Island Developing States
       - SIDS
+      - East Africa
     opportunity_types:
       - tender
       - RFP
       - request for proposal
       - consultancy contract
-      - technical assistance
       - framework agreement
+      - expression of interest
+      - long-term agreement
+      - grant
+      - funding call
+      - technology innovation challenge
+    trusted_funders:
+      - UNDP
+      - UNIDO
+      - Ministry of Blue Economy
+      - US Embassy
+      - Rodrigues Regional Assembly
+      - Bioculture Cares
 
   ngo:
-    label: "Coral Garden Conservation"
+    label: "Coral Garden Conservation (CGC)"
     keywords:
       - coral reef
+      - coral restoration
+      - coral propagation
+      - coral nursery
+      - reef rehabilitation
       - marine conservation
-      - reef restoration
-      - biodiversity
       - marine protected area
+      - voluntary marine conservation area
+      - VMCA
+      - seagrass
+      - coastal erosion
+      - native habitat restoration
+      - endemic plant nursery
+      - ridge-to-reef
+      - invasive species control
+      - Crown-of-Thorns
+      - COTS
       - community-based conservation
-      - climate resilience
-      - ocean conservation
-      - marine ecosystem
+      - marine education
+      - environmental education
+      - biodiversity
+      - ecosystem restoration
     geography:
       - Mauritius
-      - Indian Ocean
+      - Le Morne
+      - Western Indian Ocean
+      - Comoros
       - Small Island Developing States
       - SIDS
       - Africa
@@ -94,6 +170,21 @@ personas:
       - small grants programme
       - philanthropic funding
       - call for proposals
+      - CSR funding
+      - community grant
+    trusted_funders:
+      - US Embassy Self-Help Fund
+      - Ambassador's Special Self-Help Fund
+      - MOL Charitable Trust
+      - UNDP Ocean Innovation Challenge
+      - CEPF
+      - Critical Ecosystem Partnership Fund
+      - Canada Fund for Local Initiatives
+      - CFLI
+      - VARUNA
+      - Reserve Naturel de France
+      - RIU Hotels
+      - RIU CSR
 
 # Keywords that, if present, should suppress a match regardless of score
 # (e.g. adjacent sectors you've decided are not relevant).

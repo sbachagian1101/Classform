@@ -40,14 +40,18 @@ def score_opportunity(title: str, description: str, profile: dict[str, Any]) -> 
         kw_hits = _hits(text, persona.get("keywords") or [])
         geo_hits = _hits(text, persona.get("geography") or [])
         type_hits = _hits(text, persona.get("opportunity_types") or [])
+        funder_hits = _hits(text, persona.get("trusted_funders") or [])
 
-        if not kw_hits:
-            continue  # require at least one substantive keyword match
+        if not kw_hits and not funder_hits:
+            continue  # require at least one substantive keyword or funder match
 
-        score = min(1.0, 0.2 * len(kw_hits) + 0.1 * len(geo_hits) + 0.1 * len(type_hits))
+        # A trusted funder is a named organisation that already funds/employs
+        # this persona, so it counts for more than a generic keyword hit.
+        score = min(1.0, 0.2 * len(kw_hits) + 0.1 * len(geo_hits)
+                    + 0.1 * len(type_hits) + 0.3 * len(funder_hits))
         if score > 0:
             matched_personas.append(persona.get("label", _key))
-            matched_keywords.update(kw_hits + geo_hits + type_hits)
+            matched_keywords.update(kw_hits + geo_hits + type_hits + funder_hits)
             best_score = max(best_score, score)
 
     return best_score, matched_personas, sorted(matched_keywords)
@@ -68,7 +72,8 @@ def llm_score_opportunity(title: str, description: str, profile: dict[str, Any])
         return None
 
     personas_desc = "\n".join(
-        f"- {p.get('label', k)}: keywords={p.get('keywords')}, geography={p.get('geography')}"
+        f"- {p.get('label', k)}: keywords={p.get('keywords')}, geography={p.get('geography')}, "
+        f"trusted_funders={p.get('trusted_funders')}"
         for k, p in (profile.get("personas") or {}).items()
     )
     prompt = (
