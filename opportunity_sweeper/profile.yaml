@@ -1,0 +1,109 @@
+# Eligibility profile for the opportunity sweeper.
+#
+# These entries were INFERRED from names only (no CV / company profile / NGO
+# profile text was ever supplied) — treat every keyword list here as a rough
+# starting guess, not ground truth. Edit freely; the sweeper re-reads this
+# file on every run, so changes take effect on the next hourly sweep with no
+# code changes needed.
+#
+# How matching works (see matcher.py): each opportunity's title+description
+# is checked against every persona's keywords. Any keyword hit adds to that
+# persona's score; geography and opportunity-type hits add a smaller bonus.
+# An opportunity can match more than one persona (e.g. a coral-reef grant can
+# match both "company" and "ngo").
+
+personas:
+  individual:
+    label: "Suraj Bacha Gian (CV)"
+    keywords:
+      - marine
+      - environmental
+      - coastal
+      - sustainability
+      - blue economy
+      - ocean
+      - conservation
+      - marine biology
+      - project management
+      - consultant
+      - environmental impact assessment
+      - climate resilience
+    geography:
+      - Mauritius
+      - Indian Ocean
+      - Africa
+      - remote
+      - international
+    opportunity_types:
+      - job
+      - consultancy
+      - short-term contract
+      - technical assistance
+
+  company:
+    label: "Eco Marine Consultants Ltd (Mauritius)"
+    keywords:
+      - marine consultancy
+      - environmental impact assessment
+      - EIA
+      - coastal engineering
+      - marine spatial planning
+      - blue economy
+      - fisheries
+      - aquaculture
+      - ocean governance
+      - environmental consulting
+      - coastal management
+      - marine survey
+    geography:
+      - Mauritius
+      - Indian Ocean Commission
+      - East Africa
+      - Small Island Developing States
+      - SIDS
+    opportunity_types:
+      - tender
+      - RFP
+      - request for proposal
+      - consultancy contract
+      - technical assistance
+      - framework agreement
+
+  ngo:
+    label: "Coral Garden Conservation"
+    keywords:
+      - coral reef
+      - marine conservation
+      - reef restoration
+      - biodiversity
+      - marine protected area
+      - community-based conservation
+      - climate resilience
+      - ocean conservation
+      - marine ecosystem
+    geography:
+      - Mauritius
+      - Indian Ocean
+      - Small Island Developing States
+      - SIDS
+      - Africa
+      - global
+    opportunity_types:
+      - grant
+      - funding call
+      - small grants programme
+      - philanthropic funding
+      - call for proposals
+
+# Keywords that, if present, should suppress a match regardless of score
+# (e.g. adjacent sectors you've decided are not relevant).
+exclude_keywords: []
+
+# Minimum combined score (0-1) required to appear in the table by default.
+# The Streamlit UI lets you lower/raise this per session without editing
+# this file.
+min_match_score: 0.25
+
+# If true, the sweep only writes opportunities not already stored (by URL);
+# already-seen items are updated in place but not re-flagged as "new".
+notify_new_only: true
