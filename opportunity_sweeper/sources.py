@@ -18,6 +18,7 @@ sources were deliberately left out because no compliant free API exists:
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime, timedelta, timezone
 
@@ -31,13 +32,16 @@ def _warn(source: str, exc: Exception) -> None:
     print(f"[opportunity_sweeper] {source} fetch failed: {exc}", file=sys.stderr)
 
 
-def fetch_reliefweb(appname: str = "opportunity-sweeper") -> list[dict]:
+def fetch_reliefweb(appname: str | None = None) -> list[dict]:
     """ReliefWeb jobs + funding reports (humanitarian/NGO sector).
 
-    Docs: https://apidoc.reliefweb.int/ . Since 2025-11-01 a pre-approved
-    `appname` is required for sustained use — request one via the docs site
-    if the default gets rate-limited or rejected.
+    Docs: https://apidoc.reliefweb.int/ . Since 2025-11-01 ReliefWeb requires
+    a pre-approved `appname` (request one at apidoc.reliefweb.int/parameters)
+    — until then this returns 403 for everyone, which is expected and not a
+    bug. Set RELIEFWEB_APPNAME in .env once you have one; no code change
+    needed.
     """
+    appname = appname or os.environ.get("RELIEFWEB_APPNAME", "opportunity-sweeper")
     items: list[dict] = []
     try:
         resp = requests.post(
@@ -165,8 +169,16 @@ def fetch_world_bank_procurement(sector: str | None = None) -> list[dict]:
         )
         resp.raise_for_status()
         data = resp.json()
-        docs = (data.get("procnotices") or {}) if isinstance(data, dict) else {}
-        for _key, doc in docs.items():
+        raw_docs = data.get("procnotices") if isinstance(data, dict) else None
+        # The API has returned this keyed by notice id (a dict of dicts) in
+        # some responses and as a plain list in others - handle both.
+        if isinstance(raw_docs, dict):
+            docs = list(raw_docs.values())
+        elif isinstance(raw_docs, list):
+            docs = raw_docs
+        else:
+            docs = []
+        for doc in docs:
             if not isinstance(doc, dict):
                 continue
             items.append({
@@ -182,25 +194,49 @@ def fetch_world_bank_procurement(sector: str | None = None) -> list[dict]:
     return items
 
 
-def fetch_ted_eu(query: str = "marine environmental coastal consultancy") -> list[dict]:
+def _ted_title(field) -> str:
+    """notice-title arrives multilingual, e.g. {"eng": ["Some title"]}."""
+    if isinstance(field, str):
+        return field
+    if isinstance(field, dict):
+        for value in field.values():
+            if value:
+                return value[0] if isinstance(value, list) else str(value)
+    return "Untitled"
+
+
+def fetch_ted_eu(terms: tuple[str, ...] = (
+    "marine environmental", "coastal engineering",
+    "environmental impact assessment", "marine consultancy",
+)) -> list[dict]:
     """EU TED (Tenders Electronic Daily) Search API — no auth required.
 
-    Docs: https://docs.ted.europa.eu/api/2.0/search.html
+    Docs: https://docs.ted.europa.eu/api/latest/index.html . TED uses an
+    expert-search query syntax (FT~"..." for full-text), not a plain
+    keyword string, and returns multilingual field values.
     """
     items: list[dict] = []
+    query = " OR ".join(f'FT~"{t}"' for t in terms) + " SORT BY publication-date DESC"
     try:
         resp = requests.post(
             "https://api.ted.europa.eu/v3/notices/search",
-            json={"query": query, "limit": 50, "fields": ["title", "publication-date", "links"]},
+            json={
+                "query": query,
+                "fields": ["publication-number", "notice-title", "publication-date"],
+                "limit": 50,
+                "scope": "ACTIVE",
+                "paginationMode": "ITERATION",
+            },
             headers={"User-Agent": USER_AGENT, "Content-Type": "application/json"},
             timeout=TIMEOUT,
         )
         resp.raise_for_status()
         for notice in resp.json().get("notices", []):
-            links = notice.get("links", {})
+            pub_number = notice.get("publication-number", "")
+            url = f"https://ted.europa.eu/en/notice/-/detail/{pub_number}" if pub_number else "https://ted.europa.eu"
             items.append({
-                "title": str(notice.get("title", "Untitled")),
-                "url": links.get("html", {}).get("ENG") or links.get("pdf", {}).get("ENG") or "https://ted.europa.eu",
+                "title": _ted_title(notice.get("notice-title")),
+                "url": url,
                 "description": "",
                 "published_date": notice.get("publication-date", ""),
                 "source": "EU TED Tenders",
