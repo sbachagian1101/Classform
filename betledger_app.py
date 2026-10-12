@@ -66,6 +66,8 @@ with st.sidebar:
         ledger.add_balance(bal_in)
         st.success("Recorded")
         st.rerun()
+    st.divider()
+    live = st.toggle("Live refresh (use with the screen watcher)", value=False)
 
 # ---------------- Today ----------------
 summary = _show_alerts()
@@ -82,6 +84,7 @@ tab_add, tab_bets, tab_history = st.tabs(["Add from screenshot", "Bets & review"
 # ---------------- Add ----------------
 with tab_add:
     reader_ok = _vision_available()
+    st.info("Want it automatic? Run `python betledger_watch.py` on the PC where you use Bet365. It reads your screen, logs bets into this ledger and raises the alerts itself. Upload below is the manual fallback and the only option on a phone.")
     st.caption("Reader: " + ("Claude vision (with OCR fallback)" if reader_ok else "local Tesseract OCR only. Set ANTHROPIC_API_KEY for the more accurate Claude reader."))
     files = st.file_uploader("Bet slip / My Bets screenshots", type=["png", "jpg", "jpeg", "webp"], accept_multiple_files=True)
     pasted = st.text_area("…or paste the slip text", height=120, placeholder="Man City to win\nMan City v Arsenal\n@ 1.80\nStake 20.00\nWon\nReturns 36.00\nBet ref AB12345678")
@@ -177,3 +180,8 @@ with tab_history:
         if settings.daily_win_limit or settings.daily_loss_limit:
             hits = daily[(daily["profit"] >= settings.daily_win_limit if settings.daily_win_limit else False) | (daily["profit"] <= -settings.daily_loss_limit if settings.daily_loss_limit else False)]
             st.caption(f"Days a limit was hit: {len(hits)} of {len(daily)}")
+
+if live:
+    import time
+    time.sleep(5)
+    st.rerun()
